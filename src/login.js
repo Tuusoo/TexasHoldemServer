@@ -6,13 +6,25 @@ const router = express.Router();
 expressWs(router);
 
 router.ws("/", (ws, req) => {
-    // ws.send("success");
-
     ws.on("message", msg => {
         if (msg.indexOf("user:") > -1) {
+            let timer = null; // 定时器，每两秒发送一次心跳检测
             let newUserId = msg.split(":")[1];
-            user.addPlayer(newUserId);
-            ws.send("currentPlayersNum:" + user.getPlayersNum());
+            user.addPlayer({
+                id: newUserId,
+                lastTime: newUserId,
+            });
+            // 心跳检测
+            timer = setInterval(() => {
+                ws.send(`heartBeat:${newUserId}`);
+                ws.send("currentPlayersNum:" + user.getPlayersNum());
+                user.clearOfflineUser();
+            }, 2000);
+        }
+        if (msg.indexOf("online:") > -1) {
+            const userId = msg.split(":")[1],
+                userTime = msg.split(":")[2];
+            user.updateUserTime(userId, userTime);
         }
     });
 
