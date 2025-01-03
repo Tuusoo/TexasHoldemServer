@@ -1,4 +1,4 @@
-// 当前人数
+// 当前玩家
 class Players {
     constructor() {
         this.playersArray = [];
@@ -6,8 +6,12 @@ class Players {
     }
 
     // user: {id: "", lastTime: ""}
-    addPlayer(user) {
-        this.playersArray.push(user);
+    addPlayer(id) {
+        // this.playersArray.push(user);
+        const index = this.playersArray.findIndex(i => i.id === id);
+        if (index === -1) {
+            this.playersArray.push({ id: id, lastTime: new Date().getTime() });
+        }
     }
 
     removePlayer(userId) {

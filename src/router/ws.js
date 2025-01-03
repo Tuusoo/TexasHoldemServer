@@ -1,6 +1,6 @@
 import express from "express";
 import expressWs from "express-ws";
-import { handleClientMessage } from "./utils";
+import { handleClientMessage } from "../utils/index.js";
 
 const router = express.Router();
 expressWs(router);

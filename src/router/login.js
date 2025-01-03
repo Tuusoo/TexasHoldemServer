@@ -1,11 +1,13 @@
 import express from "express";
-import expressWs from "express-ws";
+import user from "../store/user.js";
 
 const router = express.Router();
-expressWs(router);
 
 router.post("/", (req, res) => {
-    console.log(req.body);
+    // console.log(req.body);
+    if(req.body.userId) {
+        user.addPlayer(req.body.userId);
+    }
     res.json({ code: "0", msg: "ok" });
 });
 
