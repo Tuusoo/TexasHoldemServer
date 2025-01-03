@@ -2,6 +2,7 @@
 class Players {
     constructor() {
         this.playersArray = [];
+        this.timer = null;
     }
 
     // user: {id: "", lastTime: ""}
@@ -35,6 +36,14 @@ class Players {
                 console.log("玩家" + i.id + "掉线");
             }
         });
+    }
+
+    startTimer(callback) {
+        this.timer = setInterval(callback, 2000);
+    }
+
+    clearTimer() {
+        clearInterval(this.timer);
     }
 }
 
