@@ -1,11 +1,15 @@
 import user from "../store/user.js";
 
-const handleMessage = (msg, type, callBack) => {
-    if (msg.indexOf(type + ":") > -1) {
-        callBack();
+export const handleWsMessage = (ws, msg) => {
+    if (msg.includes("login")) {
+        ws.send("login:ok");
+        const playerId = msg.split(":")[1];
+        user.addPlayer(playerId);
+        console.log("玩家" + playerId + "上线");
     }
-};
-
-export const handleClientMessage = (ws, msg) => {
-    console.log(msg);
+    if (msg.includes("ping")) {
+        ws.send("pong");
+        const playerId = msg.split(":")[1];
+        user.updateUserTime(playerId, new Date().getTime());
+    }
 };

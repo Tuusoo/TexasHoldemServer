@@ -7,10 +7,11 @@ class Players {
 
     // user: {id: "", lastTime: ""}
     addPlayer(id) {
-        // this.playersArray.push(user);
         const index = this.playersArray.findIndex(i => i.id === id);
         if (index === -1) {
             this.playersArray.push({ id: id, lastTime: new Date().getTime() });
+        } else {
+            this.updateUserTime(id, new Date().getTime());
         }
     }
 
@@ -34,8 +35,8 @@ class Players {
 
     clearOfflineUser() {
         const time = new Date().getTime();
-        this.playersArray.forEach((i, index) => {
-            if (time - i.lastTime > 5000) {
+        this.playersArray.forEach(i => {
+            if (time - i.lastTime > 15000) {
                 this.removePlayer(i.id);
                 console.log("玩家" + i.id + "掉线");
             }
