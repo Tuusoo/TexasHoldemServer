@@ -17,12 +17,18 @@ export const handleWsMessage = (ws, msg) => {
         const playerId = msg.split(":")[1];
         user.updateUserTime(playerId, new Date().getTime());
     }
+    if (msg.includes("name")) {
+        const playerId = msg.split(":")[1];
+        const name = msg.split(":")[2];
+        user.updateName(playerId, name);
+    }
     if (msg.includes("ready")) {
         const playerId = msg.split(":")[1];
         user.userReady(playerId);
         user.sendAll("userReady:" + playerId);
         if (user.checkIfAllReady()) {
             user.sendAll("allReady");
+            startGame(ws);
         }
     }
 };
