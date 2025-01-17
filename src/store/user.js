@@ -1,22 +1,31 @@
 // 当前玩家
 class Players {
     constructor() {
+        /**
+         * 玩家列表
+         * @type {Array<{id: string, lastTime: number, ready: boolean, ws: WebSocket}>}
+         */
         this.playersArray = [];
-        this.timer = null;
     }
 
-    // user: {id: "", lastTime: ""}
-    addPlayer(id) {
+    addPlayer(id, ws) {
         const index = this.playersArray.findIndex(i => i.id === id);
         if (index === -1) {
-            this.playersArray.push({ id: id, lastTime: new Date().getTime() });
+            this.playersArray.push({
+                id: id,
+                lastTime: new Date().getTime(),
+                ready: false,
+                ws: ws,
+            });
         } else {
-            this.updateUserTime(id, new Date().getTime());
+            this.playersArray[index].lastTime = new Date().getTime();
+            this.playersArray[index].ready = false;
+            this.playersArray[index].ws = ws;
         }
     }
 
-    removePlayer(userId) {
-        const index = this.playersArray.findIndex(i => i.id === userId);
+    removePlayer(id) {
+        const index = this.playersArray.findIndex(i => i.id === id);
         if (index > -1) {
             this.playersArray.splice(index, 1);
         }
@@ -43,12 +52,21 @@ class Players {
         });
     }
 
-    startTimer(callback) {
-        this.timer = setInterval(callback, 2000);
+    userReady(id) {
+        const index = this.playersArray.findIndex(i => i.id === id);
+        if (index > -1) {
+            this.playersArray[index].ready = true;
+        }
     }
 
-    clearTimer() {
-        clearInterval(this.timer);
+    checkIfAllReady() {
+        return this.playersArray.every(i => i.ready) && this.playersArray.length > 4;
+    }
+
+    sendAll(msg) {
+        this.playersArray.forEach(i => {
+            i.ws.send(msg);
+        });
     }
 }
 
