@@ -17,6 +17,6 @@ app.use(express.json())
 app.listen(port, () => {
     setInterval(() => {
         user.clearOfflineUser();
-    }, 10000);
+    }, 5000);
     console.log(`启动成功，当前服务端口${port}`);
 });

@@ -6,43 +6,55 @@ import gameStatus from "../store/gameStatus.js";
  * @param {string} msg
  */
 export const handleWsMessage = (ws, msg) => {
-    if (msg.includes("login")) {
-        ws.send("login:ok");
-        const playerId = msg.split(":")[1];
+    const { type, data } = JSON.parse(msg);
+    const sendMsg = obj => {
+        ws.send(JSON.stringify(obj));
+    };
+    if (type === "login") {
+        sendMsg({ type: "login", data: "ok" });
+        const playerId = data;
         user.addPlayer(playerId, ws);
         console.log("玩家" + playerId + "上线");
     }
-    if (msg.includes("ping")) {
-        ws.send("pong");
-        const playerId = msg.split(":")[1];
+    if (type === "ping") {
+        sendMsg({ type: "pong", data: "pong" });
+        const playerId = data;
         user.updateUserTime(playerId, new Date().getTime());
     }
-    if (msg.includes("name")) {
-        const playerId = msg.split(":")[1];
-        const name = msg.split(":")[2];
-        user.updateName(playerId, name);
-    }
-    if (msg.includes("ready")) {
-        const playerId = msg.split(":")[1];
+    if (type === "ready") {
+        const playerId = data;
         user.userReady(playerId);
-        user.sendAll("userReady:" + playerId);
+        sendUserList();
         if (user.checkIfAllReady()) {
-            user.sendAll("allReady");
             startGame(ws);
         }
     }
 };
-
+/**
+ * 广播玩家列表
+ */
+export const sendUserList = () =>
+    user.sendAll({ type: "userList", data: user.getPlayersState() });
 /**
  * 开始游戏
  * @param {WebSocket} ws
  */
 const startGame = ws => {
+    const sendMsg = obj => {
+        ws.send(JSON.stringify(obj));
+    };
+    user.sendAll({ type: "gameStart", data: "ok" });
     if (gameStatus.dealer === "") {
         // 没有庄家，说明是第一局，随机生成庄家
         const index = Math.floor(Math.random() * user.getPlayersNum());
         gameStatus.setDealer(user.playersArray[index].id);
-        ws.send("setDealer:" + gameStatus.dealer);
+        user.sendAll({
+            type: "setDealer",
+            data: {
+                id: gameStatus.dealer,
+                name: user.playersArray[index].name,
+            },
+        });
     } else {
         // 有庄家，说明是第二局及以后
         const index = user.playersArray.findIndex(
@@ -51,7 +63,14 @@ const startGame = ws => {
         gameStatus.setDealer(
             user.playersArray[(index + 1) % user.getPlayersNum()].id
         );
-        ws.send("setDealer:" + gameStatus.dealer);
+        user.sendAll({
+            type: "setDealer",
+            data: {
+                id: gameStatus.dealer,
+                name: user.playersArray[(index + 1) % user.getPlayersNum()]
+                    .name,
+            },
+        });
     }
     gameStatus.setStatus("playing");
 };

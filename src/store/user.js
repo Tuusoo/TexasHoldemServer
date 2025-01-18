@@ -1,4 +1,5 @@
-// 当前玩家
+import { sendUserList } from "../utils/index.js";
+
 class Players {
     constructor() {
         /**
@@ -35,7 +36,6 @@ class Players {
             });
         } else {
             this.playersArray[index].lastTime = new Date().getTime();
-            this.playersArray[index].ready = false;
             this.playersArray[index].ws = ws;
         }
     }
@@ -43,7 +43,20 @@ class Players {
     updateName(id, name) {
         const index = this.playersArray.findIndex(i => i.id === id);
         if (index > -1) {
-            this.playersArray[index].name = name;
+            let hasSameName = false;
+            this.playersArray.forEach(i => {
+                if (i.name === name && i.id !== id) {
+                    hasSameName = true;
+                }
+            });
+            if (hasSameName) {
+                return "有人用这个昵称了";
+            } else {
+                this.playersArray[index].name = name;
+                return "ok";
+            }
+        } else {
+            return "找不到这个玩家";
         }
     }
 
@@ -58,6 +71,18 @@ class Players {
         return this.playersArray.length;
     }
 
+    getPlayersState() {
+        return this.playersArray.map(i => ({
+            id: i.id,
+            name: i.name,
+            ready: i.ready,
+            chips: i.chips,
+            currentBet: i.currentBet,
+            isFold: i.isFold,
+            isAllIn: i.isAllIn,
+        }));
+    }
+
     updateUserTime(id, newTime) {
         const index = this.playersArray.findIndex(i => i.id === id);
         if (index > -1) {
@@ -68,9 +93,10 @@ class Players {
     clearOfflineUser() {
         const time = new Date().getTime();
         this.playersArray.forEach(i => {
-            if (time - i.lastTime > 15000) {
+            if (time - i.lastTime > 60000) {
                 console.log("玩家" + i.id + "掉线");
-                this.sendAll("有玩家掉线，游戏结束");
+                this.removePlayer(i.id);
+                sendUserList();
             }
         });
     }
@@ -85,14 +111,14 @@ class Players {
     checkIfAllReady() {
         return (
             this.playersArray.every(i => i.ready) &&
-            this.playersArray.length > 4 &&
+            this.playersArray.length > 3 &&
             this.playersArray.length < 11
         );
     }
 
     sendAll(msg) {
         this.playersArray.forEach(i => {
-            i.ws.send(msg);
+            i.ws.send(JSON.stringify(msg));
         });
     }
 }
