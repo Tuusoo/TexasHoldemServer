@@ -12,7 +12,8 @@ class Players {
          * ready 玩家是否准备
          * chips 玩家筹码
          * handCards 玩家手牌
-         * currentBet 此局下注总额
+         * currentBet 此轮下注总额
+         * totalBet 总下注额
          * isFold 玩家是否弃牌
          * isAllIn 玩家是否all in
          */
@@ -30,6 +31,7 @@ class Players {
                 chips: 1000,
                 handCards: [],
                 currentBet: 0,
+                totalBet: 0,
                 isFold: false,
                 isAllIn: false,
                 ws: ws,
@@ -60,6 +62,10 @@ class Players {
         }
     }
 
+    getPlayer(id) {
+        return this.playersArray.find(i => i.id === id);
+    }
+
     removePlayer(id) {
         const index = this.playersArray.findIndex(i => i.id === id);
         if (index > -1) {
@@ -78,6 +84,7 @@ class Players {
             ready: i.ready,
             chips: i.chips,
             currentBet: i.currentBet,
+            totalBet: i.totalBet,
             isFold: i.isFold,
             isAllIn: i.isAllIn,
         }));
@@ -96,7 +103,7 @@ class Players {
             if (time - i.lastTime > 60000) {
                 console.log("玩家" + i.id + "掉线");
                 this.removePlayer(i.id);
-                sendUserList();
+                this.sendAll({ type: "gameOver", data: "gameOver" });
             }
         });
     }
@@ -114,6 +121,39 @@ class Players {
             this.playersArray.length > 3 &&
             this.playersArray.length < 11
         );
+    }
+
+    bet(id, bet) {
+        const index = this.playersArray.findIndex(i => i.id === id);
+        if (index > -1) {
+            this.playersArray[index].chips -= bet;
+            this.playersArray[index].currentBet += bet;
+            this.playersArray[index].totalBet += bet;
+            this.sendAll({
+                type: "bet",
+                data: { id: id, name: this.playersArray[index].name, bet: bet },
+            });
+        }
+    }
+
+    clearCurrentBet() {
+        this.playersArray.forEach(i => {
+            i.currentBet = 0;
+        });
+    }
+
+    fold(id) {
+        const index = this.playersArray.findIndex(i => i.id === id);
+        if (index > -1) {
+            this.playersArray[index].isFold = true;
+            this.sendAll({
+                type: "fold",
+                data: {
+                    id: id,
+                    name: this.playersArray[index].name,
+                },
+            });
+        }
     }
 
     sendAll(msg) {

@@ -6,7 +6,7 @@ const router = express.Router();
 expressWs(router);
 
 router.ws("/", (ws, req) => {
-    ws.on("message", (msg) => handleWsMessage(ws, msg));
+    ws.on("message", msg => handleWsMessage(ws, msg));
 });
 
 export default router;
