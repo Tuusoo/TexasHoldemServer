@@ -1,20 +1,20 @@
 // 德州扑克牌型比较算法，是ChatGpt生成的
 
-// 定义牌型的权重
-const HAND_RANKINGS = {
-    HighCard: 1,
-    OnePair: 2,
-    TwoPair: 3,
-    ThreeOfAKind: 4,
-    Straight: 5,
-    Flush: 6,
-    FullHouse: 7,
-    FourOfAKind: 8,
-    StraightFlush: 9,
-    RoyalFlush: 10,
-};
+// 定义牌型的优先级
+const HAND_RANKINGS = [
+    "High Card",
+    "One Pair",
+    "Two Pair",
+    "Three of a Kind",
+    "Straight",
+    "Flush",
+    "Full House",
+    "Four of a Kind",
+    "Straight Flush",
+    "Royal Flush",
+];
 
-// 定义点数的权重
+// 转换 rank 值为数字方便比较
 const RANK_VALUES = {
     2: 2,
     3: 3,
@@ -31,166 +31,129 @@ const RANK_VALUES = {
     A: 14,
 };
 
-// 将手牌解析为排序后的点数和花色数组
-function parseHand(cards) {
-    return cards.sort((a, b) => RANK_VALUES[b.rank] - RANK_VALUES[a.rank]);
+// 比较两手牌型的函数
+function compareHands(handA, handB) {
+    if (handA.rank < handB.rank) return -1;
+    if (handA.rank > handB.rank) return 1;
+    for (let i = 0; i < handA.highCards.length; i++) {
+        if (handA.highCards[i] > handB.highCards[i]) return 1;
+        if (handA.highCards[i] < handB.highCards[i]) return -1;
+    }
+    return 0;
 }
 
-// 生成从所有牌中选择的5张最大牌型的组合
-function findBestHand(cards) {
-    const combinations = getCombinations(cards, 5);
-    let bestHand = null;
-
-    for (const combo of combinations) {
-        const evaluated = evaluateHand(combo);
-        if (
-            !bestHand ||
-            evaluated.rank > bestHand.rank ||
-            (evaluated.rank === bestHand.rank && compareRanks(evaluated.ranks, bestHand.ranks) > 0)
-        ) {
-            bestHand = { ...evaluated, cards: combo };
+// 生成所有可能的 7 张牌的组合
+function generateCombinations(cards) {
+    const combinations = [];
+    const len = cards.length;
+    function combine(temp, start) {
+        if (temp.length === 5) {
+            combinations.push(temp);
+            return;
+        }
+        for (let i = start; i < len; i++) {
+            combine([...temp, cards[i]], i + 1);
         }
     }
-
-    return bestHand;
+    combine([], 0);
+    return combinations;
 }
 
-// 获取数组的所有k个元素组合
-function getCombinations(arr, k) {
-    if (k === 0) return [[]];
-    if (arr.length < k) return [];
-    const [first, ...rest] = arr;
-    const withFirst = getCombinations(rest, k - 1).map(comb => [first, ...comb]);
-    const withoutFirst = getCombinations(rest, k);
-    return [...withFirst, ...withoutFirst];
-}
-
-// 判断牌型
+// 评估手牌类型
 function evaluateHand(cards) {
-    const hand = parseHand(cards);
-    const ranks = hand.map(c => RANK_VALUES[c.rank]);
-    const suits = hand.map(c => c.suit);
-
-    const isFlush = new Set(suits).size === 1;
+    // 判断是否为同花
+    const isFlush = cards.every(card => card.suit === cards[0].suit);
+    // 按 rank 从小到大排序
+    const sortedRanks = cards.map(card => RANK_VALUES[card.rank]).sort((a, b) => a - b);
+    // 判断是否为顺子
     const isStraight =
-        ranks.every((rank, i, arr) => i === 0 || rank === arr[i - 1] - 1) ||
-        ranks.toString() === "14,5,4,3,2";
+        sortedRanks.every((val, idx) => idx === 0 || val === sortedRanks[idx - 1] + 1) ||
+        JSON.stringify(sortedRanks) === JSON.stringify([2, 3, 4, 5, 14]); // A-5 特例
+    // 统计 rank 出现的频率
+    const rankCounts = {};
+    sortedRanks.forEach(rank => (rankCounts[rank] = (rankCounts[rank] || 0) + 1));
+    const counts = Object.values(rankCounts).sort((a, b) => b - a);
 
-    if (isFlush && isStraight && ranks[0] === 14 && ranks[1] === 13)
-        return { rank: HAND_RANKINGS.RoyalFlush, ranks, type: "RoyalFlush" };
-    if (isFlush && isStraight)
-        return { rank: HAND_RANKINGS.StraightFlush, ranks, type: "StraightFlush" };
+    // 按频率和牌值排序 distinctRanks
+    const distinctRanks = Object.keys(rankCounts)
+        .map(Number)
+        .sort((a, b) => {
+            const countDiff = rankCounts[b] - rankCounts[a]; // 按频率排序
+            if (countDiff !== 0) return countDiff;
+            return b - a; // 频率相同时按牌值大小排序
+        });
 
-    const counts = ranks.reduce((acc, rank) => {
-        acc[rank] = (acc[rank] || 0) + 1;
-        return acc;
-    }, {});
-
-    const values = Object.values(counts).sort((a, b) => b - a);
-    if (values[0] === 4) return { rank: HAND_RANKINGS.FourOfAKind, ranks, type: "FourOfAKind" };
-    if (values[0] === 3 && values[1] === 2)
-        return { rank: HAND_RANKINGS.FullHouse, ranks, type: "FullHouse" };
-    if (isFlush) return { rank: HAND_RANKINGS.Flush, ranks, type: "Flush" };
-    if (isStraight) return { rank: HAND_RANKINGS.Straight, ranks, type: "Straight" };
-    if (values[0] === 3) return { rank: HAND_RANKINGS.ThreeOfAKind, ranks, type: "ThreeOfAKind" };
-    if (values[0] === 2 && values[1] === 2)
-        return { rank: HAND_RANKINGS.TwoPair, ranks, type: "TwoPair" };
-    if (values[0] === 2) {
-        const pairRank = parseInt(Object.keys(counts).find(key => counts[key] === 2));
-        const kickers = ranks.filter(rank => rank !== pairRank).sort((a, b) => b - a);
-        return {
-            rank: HAND_RANKINGS.OnePair,
-            ranks: [pairRank, ...kickers], // 对子放首位
-            type: "OnePair",
-        };
+    // 确定牌型
+    let rank = 0;
+    let highCards = [];
+    if (isFlush && isStraight) {
+        rank = sortedRanks[4] === 14 && sortedRanks[0] === 10 ? 9 : 8; // Royal Flush 或 Straight Flush
+        highCards = sortedRanks.slice().reverse();
+    } else if (counts[0] === 4) {
+        rank = 7; // Four of a Kind
+        highCards = [distinctRanks[0], distinctRanks[1]];
+    } else if (counts[0] === 3 && counts[1] === 2) {
+        rank = 6; // Full House
+        highCards = [distinctRanks[0], distinctRanks[1]];
+    } else if (isFlush) {
+        rank = 5; // Flush
+        highCards = sortedRanks.slice().reverse();
+    } else if (isStraight) {
+        rank = 4; // Straight
+        highCards = sortedRanks.slice().reverse();
+    } else if (counts[0] === 3) {
+        rank = 3; // Three of a Kind
+        highCards = [distinctRanks[0], ...distinctRanks.slice(1)];
+    } else if (counts[0] === 2 && counts[1] === 2) {
+        rank = 2; // Two Pair
+        highCards = [distinctRanks[0], distinctRanks[1], distinctRanks[2]];
+    } else if (counts[0] === 2) {
+        rank = 1; // One Pair
+        highCards = [distinctRanks[0], ...distinctRanks.slice(1)];
+    } else {
+        rank = 0; // High Card
+        highCards = sortedRanks.slice().reverse();
     }
 
-    return { rank: HAND_RANKINGS.HighCard, ranks, type: "HighCard" };
+    return { rank, highCards, name: HAND_RANKINGS[rank], cards };
 }
 
-// 比较两副牌的点数
-function compareRanks(ranks1, ranks2) {
-    for (let i = 0; i < Math.max(ranks1.length, ranks2.length); i++) {
-        const rank1 = ranks1[i] || 0; // 防止数组越界
-        const rank2 = ranks2[i] || 0;
-        if (rank1 !== rank2) {
-            return rank1 > rank2 ? 1 : -1;
-        }
-    }
-    return 0; // 平局
-}
-
-// 比较多名玩家的最佳牌型
-function rankPlayers(playerCards, communityCards) {
-    const results = playerCards.map((player, index) => {
-        const allCards = [...player, ...communityCards];
-        const bestHand = findBestHand(allCards);
-        return { player: index + 1, bestHand };
+// 主函数：比较德州扑克玩家手牌
+function rankPlayers(players, communityCards) {
+    const results = players.map(player => {
+        const allCards = [...player.handCards, ...communityCards];
+        const combinations = generateCombinations(allCards);
+        const bestHand = combinations
+            .map(combo => evaluateHand(combo))
+            .sort(compareHands)
+            .pop();
+        return { id: player.id, name: bestHand.name, cards: bestHand.cards, bestHand };
     });
 
-    results.sort((a, b) => {
-        if (a.bestHand.rank !== b.bestHand.rank) {
-            return b.bestHand.rank - a.bestHand.rank;
-        }
-        return compareRanks(b.bestHand.ranks, a.bestHand.ranks);
-    });
+    // 排序玩家
+    results.sort((a, b) => compareHands(a.bestHand, b.bestHand));
 
-    const rankedGroups = [];
+    // 分组排名
+    const rankings = [];
     let currentGroup = [results[0]];
-
     for (let i = 1; i < results.length; i++) {
-        const prev = results[i - 1];
-        const curr = results[i];
-        if (
-            curr.bestHand.rank === prev.bestHand.rank &&
-            compareRanks(curr.bestHand.ranks, prev.bestHand.ranks) === 0
-        ) {
-            currentGroup.push(curr);
+        if (compareHands(results[i - 1].bestHand, results[i].bestHand) === 0) {
+            currentGroup.push(results[i]);
         } else {
-            rankedGroups.push(currentGroup);
-            currentGroup = [curr];
+            rankings.push(currentGroup);
+            currentGroup = [results[i]];
         }
     }
-    rankedGroups.push(currentGroup);
+    rankings.push(currentGroup);
 
-    return rankedGroups;
+    // 格式化输出
+    return rankings.map(group =>
+        group.map(player => ({
+            id: player.id,
+            name: player.name,
+            cards: player.cards,
+        }))
+    );
 }
 
 export default rankPlayers;
-
-// 示例用法
-// const players = [
-//     [
-//         { rank: "A", suit: "spade" },
-//         { rank: "K", suit: "spade" },
-//     ],
-//     [
-//         { rank: "9", suit: "club" },
-//         { rank: "9", suit: "diamond" },
-//     ],
-//     [
-//         { rank: "Q", suit: "club" },
-//         { rank: "J", suit: "heart" },
-//     ],
-// ];
-
-// const communityCards = [
-//     { rank: "Q", suit: "heart" },
-//     { rank: "J", suit: "spade" },
-//     { rank: "10", suit: "spade" },
-//     { rank: "8", suit: "diamond" },
-//     { rank: "7", suit: "heart" },
-// ];
-
-// const rankings = rankPlayers(players, communityCards);
-// rankings.forEach((group, index) => {
-//     console.log(
-//         `Rank #${index + 1}:`,
-//         group.map(
-//             result =>
-//                 `Player ${result.player} (${result.bestHand.type}) with cards: ${JSON.stringify(
-//                     result.bestHand.cards
-//                 )}`
-//         )
-//     );
-// });

@@ -79,6 +79,7 @@ export const sendUserList = () => user.sendAll({ type: "userList", data: user.ge
 const startGame = () => {
     // 广播游戏开始
     user.sendAll({ type: "gameStart", data: "ok" });
+    gameStatus.setStatus("round1");
     // 生成庄家
     if (gameStatus.dealer === "") {
         // 没有庄家，说明是第一局，随机生成庄家
@@ -107,10 +108,13 @@ const startGame = () => {
     const deck = createShuffleDeck();
     const players = createDealOrder(gameStatus.dealer, user.playersArray);
     user.bet(players[1].id, 10);
-    user.bet(players[2].id, 20);
+    setTimeout(() => {
+        user.bet(players[2].id, 20);
+    }, 2000);
     gameStatus.setHighestBet(20);
+    gameStatus.setDeck(deck);
     sendUserList();
-    dealCards(players, deck);
+    dealCards(players);
 };
 /**
  * 创建洗牌后的牌堆
@@ -140,9 +144,10 @@ const createDealOrder = (dealer, playersList) => {
 /**
  * 发牌
  */
-const dealCards = (players, deck) => {
+const dealCards = players => {
     // 每隔0.2秒发一张牌，每人两张
     let count = 0;
+    const deck = gameStatus.deck;
     const interval = setInterval(() => {
         const player = players[count % players.length];
         player.handCards.push(deck.pop());
@@ -156,14 +161,14 @@ const dealCards = (players, deck) => {
             clearInterval(interval);
             // 设置当前操作玩家为大盲注后一名玩家
             gameStatus.setCurrentPlayer(players[3].id);
-            gameStatus.setStatus("round1");
         }
     }, 200);
 };
 /**
  * 发公共牌
  */
-const dealCommunityCards = deck => {
+const dealCommunityCards = () => {
+    const deck = gameStatus.deck;
     if (gameStatus.status === "round1") {
         for (let i = 0; i < 3; i++) {
             gameStatus.communityCards.push(deck.pop());
@@ -178,6 +183,7 @@ const dealCommunityCards = deck => {
  */
 const nextPlayer = id => {
     if (id === gameStatus.dealer) {
+        // 进行到庄家，需要找到需要补注的玩家
         findNeedAddBet();
     } else {
         const players = createDealOrder(gameStatus.dealer, user.playersArray)
@@ -196,10 +202,12 @@ const findNeedAddBet = () => {
         user.sendAll({
             type: "winner",
             data: {
-                id: players[0].id,
-                name: players[0].name,
+                id: [players[0].id],
+                name: [players[0].name],
             },
         });
+        gameStatus.setStatus("settling");
+        startNewGame();
         return;
     }
     const needAddBet = players.find(i => i.currentBet < gameStatus.highestBet);
@@ -217,19 +225,31 @@ const findNeedAddBet = () => {
                 dealCommunityCards();
                 gameStatus.setStatus("round2");
                 handleNewRound();
-                if (lastPlayers[0].id === gameStatus.dealer) {
-                    gameStatus.setCurrentPlayer(lastPlayers[1].id);
+                if (players[0].id === gameStatus.dealer) {
+                    gameStatus.setCurrentPlayer(players[1].id);
                 } else {
-                    gameStatus.setCurrentPlayer(lastPlayers[0].id);
+                    gameStatus.setCurrentPlayer(players[0].id);
                 }
                 break;
             case "round2":
                 dealCommunityCards();
                 gameStatus.setStatus("round3");
+                handleNewRound();
+                if (players[0].id === gameStatus.dealer) {
+                    gameStatus.setCurrentPlayer(players[1].id);
+                } else {
+                    gameStatus.setCurrentPlayer(players[0].id);
+                }
                 break;
             case "round3":
                 dealCommunityCards();
                 gameStatus.setStatus("round4");
+                handleNewRound();
+                if (players[0].id === gameStatus.dealer) {
+                    gameStatus.setCurrentPlayer(players[1].id);
+                } else {
+                    gameStatus.setCurrentPlayer(players[0].id);
+                }
                 break;
             case "round4":
                 settle();
@@ -253,17 +273,38 @@ const handleNewRound = () => {
  */
 const settle = () => {
     const settlePlayers = user.playersArray.filter(i => !i.isFold);
-    const players = settlePlayers.map(i => i.handCards);
     const communityCards = gameStatus.communityCards;
-    const rankings = comparePoker(players, communityCards);
+    const rankings = comparePoker(settlePlayers, communityCards).reverse();
     const winner = rankings[0];
-    const winnerIds = winner.map(i => i.player);
-    const winnerNames = winner.map(i => i.name);
     user.sendAll({
         type: "winner",
         data: {
-            ids: winnerIds,
-            names: winnerNames,
+            id: winner.map(i => i.id),
+            name: winner.map(i => user.getPlayer(i.id).name),
+            cards: winner[0].name,
         },
     });
+    user.sendAll({
+        type: "gameResult",
+        data: rankings,
+    });
+    startNewGame();
+};
+/**
+ * 新的一局
+ */
+const startNewGame = () => {
+    user.playersArray.forEach(i => {
+        i.ready = false;
+        i.handCards = [];
+        i.currentBet = 0;
+        i.totalBet = 0;
+        i.isFold = false;
+        i.isAllIn = false;
+    });
+    sendUserList();
+    gameStatus.communityCards = [];
+    user.sendAll({ type: "communityCards", data: gameStatus.communityCards });
+    gameStatus.setHighestBet(0);
+    gameStatus.deck = [];
 };

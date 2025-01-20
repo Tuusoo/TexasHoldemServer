@@ -7,6 +7,7 @@ class gameStatus {
         this.communityCards = []; // 公共牌
         this.currentPlayer = ""; // 当前操作玩家id
         this.highestBet = 0; // 当前最高下注
+        this.deck = []; // 牌
     }
 
     setStatus(status) {
@@ -25,6 +26,10 @@ class gameStatus {
 
     setHighestBet(bet) {
         this.highestBet = bet;
+    }
+
+    setDeck(deck) {
+        this.deck = deck;
     }
 }
 
