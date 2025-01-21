@@ -4,7 +4,7 @@ class Players {
     constructor() {
         /**
          * 玩家列表
-         * @type {Array<{id: string, name: string, lastTime: number, ws: WebSocket, ready: boolean, chips: number, handCards: string[], currentBet: number, isFold: boolean, isAllIn: boolean}>}
+         * @type {Array<{id: string, name: string, lastTime: number, ws: WebSocket, ready: boolean, chips: number, handCards: string[], currentBet: number, totalBet: number, isFold: boolean, isAllIn: boolean}>}
          * id 玩家id
          * name 玩家昵称
          * lastTime 最后一次活动时间
@@ -101,7 +101,6 @@ class Players {
         const time = new Date().getTime();
         this.playersArray.forEach(i => {
             if (time - i.lastTime > 60000) {
-                console.log("玩家" + i.id + "掉线");
                 this.removePlayer(i.id);
                 this.sendAll({ type: "gameOver", data: "gameOver" });
             }
@@ -112,6 +111,7 @@ class Players {
         const index = this.playersArray.findIndex(i => i.id === id);
         if (index > -1) {
             this.playersArray[index].ready = true;
+            sendUserList();
         }
     }
 
@@ -133,6 +133,7 @@ class Players {
                 type: "bet",
                 data: { id: id, name: this.playersArray[index].name, bet: bet },
             });
+            sendUserList();
         }
     }
 
@@ -153,7 +154,37 @@ class Players {
                     name: this.playersArray[index].name,
                 },
             });
+            sendUserList();
         }
+    }
+
+    allIn(id) {
+        const index = this.playersArray.findIndex(i => i.id === id);
+        if (index > -1) {
+            this.playersArray[index].isAllIn = true;
+            this.playersArray[index].currentBet += this.playersArray[index].chips;
+            this.playersArray[index].totalBet += this.playersArray[index].chips;
+            this.sendAll({
+                type: "allIn",
+                data: {
+                    id: id,
+                    name: this.playersArray[index].name,
+                    chips: this.playersArray[index].chips,
+                },
+            });
+            sendUserList();
+        }
+    }
+
+    addChips(id, chips) {
+        const index = this.playersArray.findIndex(i => i.id === id);
+        if (index > -1) {
+            this.playersArray[index].chips += chips;
+        }
+    }
+
+    getPlayersTotalBet() {
+        return this.playersArray.reduce((acc, cur) => acc + cur.totalBet, 0);
     }
 
     sendAll(msg) {

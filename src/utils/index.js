@@ -15,7 +15,6 @@ export const handleWsMessage = (ws, msg) => {
         sendMsg({ type: "login", data: "ok" });
         const playerId = data;
         user.addPlayer(playerId, ws);
-        console.log("玩家" + playerId + "上线");
     }
     if (type === "ping") {
         sendMsg({ type: "pong", data: "pong" });
@@ -25,7 +24,6 @@ export const handleWsMessage = (ws, msg) => {
     if (type === "ready") {
         const playerId = data;
         user.userReady(playerId);
-        sendUserList();
         if (user.checkIfAllReady()) {
             startGame(ws);
         }
@@ -36,25 +34,21 @@ export const handleWsMessage = (ws, msg) => {
         if (bet > gameStatus.highestBet) {
             gameStatus.setHighestBet(bet);
         }
-        sendUserList();
         nextPlayer(id);
     }
     if (type === "fold") {
         const playerId = data;
         user.fold(playerId);
-        sendUserList();
         nextPlayer(playerId);
     }
     if (type === "addBet") {
         const playerId = data;
         user.bet(playerId, gameStatus.highestBet - user.getPlayer(playerId).currentBet);
-        sendUserList();
         findNeedAddBet();
     }
     if (type === "noAddBet") {
         const playerId = data;
         user.fold(playerId);
-        sendUserList();
         findNeedAddBet();
     }
     if (type === "check") {
@@ -68,11 +62,40 @@ export const handleWsMessage = (ws, msg) => {
         });
         nextPlayer(playerId);
     }
+    if (type === "allIn") {
+        const playerId = data;
+        user.allIn(playerId);
+        nextPlayer(playerId);
+    }
 };
 /**
  * 广播玩家列表
  */
-export const sendUserList = () => user.sendAll({ type: "userList", data: user.getPlayersState() });
+export const sendUserList = () => {
+    user.sendAll({ type: "userList", data: user.getPlayersState() });
+    process.stdout.write("\x1B[2J\x1B[0f");
+    console.table(
+        user.playersArray.map(i => ({
+            id: i.id,
+            name: i.name,
+            ready: i.ready,
+            chips: i.chips,
+            handCards: i.handCards.map(formatCard).join(" "),
+            currentBet: i.currentBet,
+            totalBet: i.totalBet,
+            isFold: i.isFold,
+            isAllIn: i.isAllIn,
+        }))
+    );
+    console.table({
+        status: gameStatus.status,
+        dealer: gameStatus.dealer,
+        currentPlayer: gameStatus.currentPlayer,
+        highestBet: gameStatus.highestBet,
+        deck: gameStatus.deck.length,
+        communityCards: gameStatus.communityCards.map(formatCard).join(" "),
+    });
+};
 /**
  * 开始游戏
  */
@@ -113,7 +136,6 @@ const startGame = () => {
     }, 2000);
     gameStatus.setHighestBet(20);
     gameStatus.setDeck(deck);
-    sendUserList();
     dealCards(players);
 };
 /**
@@ -199,15 +221,7 @@ const nextPlayer = id => {
 const findNeedAddBet = () => {
     const players = createDealOrder(gameStatus.dealer, user.playersArray).filter(i => !i.isFold);
     if (players.length === 1) {
-        user.sendAll({
-            type: "winner",
-            data: {
-                id: [players[0].id],
-                name: [players[0].name],
-            },
-        });
-        gameStatus.setStatus("settling");
-        startNewGame();
+        settle();
         return;
     }
     const needAddBet = players.find(i => i.currentBet < gameStatus.highestBet);
@@ -262,9 +276,7 @@ const findNeedAddBet = () => {
  * 新一轮开始
  */
 const handleNewRound = () => {
-    user.playersArray.forEach(i => {
-        i.currentBet = 0;
-    });
+    user.clearCurrentBet();
     gameStatus.setHighestBet(0);
     sendUserList();
 };
@@ -273,8 +285,24 @@ const handleNewRound = () => {
  */
 const settle = () => {
     const settlePlayers = user.playersArray.filter(i => !i.isFold);
+    if (settlePlayers.length === 1) {
+        gameStatus.setStatus("settling");
+        // 当只有一个玩家没有弃牌时，他赢得所有筹码
+        const totalBet = user.getPlayersTotalBet();
+        user.addChips(settlePlayers[0].id, totalBet);
+        user.sendAll({
+            type: "winner",
+            data: {
+                id: [settlePlayers[0].id],
+                name: [settlePlayers[0].name],
+                chips: totalBet,
+            },
+        });
+        startNewGame();
+        return;
+    }
     const communityCards = gameStatus.communityCards;
-    const rankings = comparePoker(settlePlayers, communityCards).reverse();
+    const rankings = comparePoker(settlePlayers, communityCards);
     const winner = rankings[0];
     user.sendAll({
         type: "winner",
@@ -288,7 +316,32 @@ const settle = () => {
         type: "gameResult",
         data: rankings,
     });
+    handleChipAllocation(rankings);
     startNewGame();
+};
+/**
+ * 结算的时候计算筹码分配
+ */
+const handleChipAllocation = rankings => {
+    const totalBet = user.getPlayersTotalBet(); // 所有玩家总下注
+    const players = createDealOrder(gameStatus.dealer, user.playersArray); // 从庄家开始的玩家列表
+    // 获胜者是否有all in
+    const winnerHasAllIn = rankings[0].some(i => user.getPlayer(i.id).isAllIn);
+    if (winnerHasAllIn) {
+        // TODO: 处理有all in的情况
+    } else {
+        const floorNum = Math.floor(totalBet / rankings[0].length / 10) * 10;
+        rankings[0].forEach(i => {
+            user.addChips(i.id, floorNum);
+        });
+        // 如果奖池不能整除获胜者人数，从庄家开始顺时针寻找获胜者，给剩余筹码
+        if (floorNum * rankings[0].length !== totalBet) {
+            const winnerID = rankings[0].map(i => i.id);
+            const remainder = totalBet - floorNum * rankings[0].length;
+            const luckyGuy = players.find(i => winnerID.includes(i.id));
+            user.addChips(luckyGuy.id, remainder);
+        }
+    }
 };
 /**
  * 新的一局
@@ -307,4 +360,16 @@ const startNewGame = () => {
     user.sendAll({ type: "communityCards", data: gameStatus.communityCards });
     gameStatus.setHighestBet(0);
     gameStatus.deck = [];
+};
+/**
+ * 把卡牌对象格式化成字符串
+ */
+const formatCard = card => {
+    const suitEmoji = {
+        heart: "♥",
+        diamond: "♦",
+        club: "♣",
+        spade: "♠",
+    };
+    return suitEmoji[card.suit] + card.rank;
 };

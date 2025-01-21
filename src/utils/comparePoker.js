@@ -153,7 +153,7 @@ function rankPlayers(players, communityCards) {
             name: player.name,
             cards: player.cards,
         }))
-    );
+    ).reverse();
 }
 
 export default rankPlayers;
