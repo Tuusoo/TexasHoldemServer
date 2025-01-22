@@ -88,7 +88,7 @@ function evaluateHand(cards) {
     let highCards = [];
     if (isFlush && isStraight) {
         rank = sortedRanks[4] === 14 && sortedRanks[0] === 10 ? 9 : 8; // Royal Flush 或 Straight Flush
-        highCards = sortedRanks.slice().reverse();
+        highCards = sortedRanks.slice().reverse().shift();
     } else if (counts[0] === 4) {
         rank = 7; // Four of a Kind
         highCards = [distinctRanks[0], distinctRanks[1]];
@@ -100,7 +100,7 @@ function evaluateHand(cards) {
         highCards = sortedRanks.slice().reverse();
     } else if (isStraight) {
         rank = 4; // Straight
-        highCards = sortedRanks.slice().reverse();
+        highCards = sortedRanks.slice().reverse().shift();
     } else if (counts[0] === 3) {
         rank = 3; // Three of a Kind
         highCards = [distinctRanks[0], ...distinctRanks.slice(1)];
@@ -147,13 +147,15 @@ function rankPlayers(players, communityCards) {
     rankings.push(currentGroup);
 
     // 格式化输出
-    return rankings.map(group =>
-        group.map(player => ({
-            id: player.id,
-            name: player.name,
-            cards: player.cards,
-        }))
-    ).reverse();
+    return rankings
+        .map(group =>
+            group.map(player => ({
+                id: player.id,
+                name: player.name,
+                cards: player.cards,
+            }))
+        )
+        .reverse();
 }
 
 export default rankPlayers;
