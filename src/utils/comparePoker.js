@@ -118,7 +118,12 @@ function evaluateHand(cards) {
     return { rank, highCards, name: HAND_RANKINGS[rank], cards };
 }
 
-// 主函数：比较德州扑克玩家手牌
+/**
+ * 主函数：比较德州扑克玩家手牌
+ * @param {*} players
+ * @param {*} communityCards
+ * @returns { { id: number; name: string; cards: { rank: string; suit: string }[] }[][] }
+ */
 function rankPlayers(players, communityCards) {
     const results = players.map(player => {
         const allCards = [...player.handCards, ...communityCards];
