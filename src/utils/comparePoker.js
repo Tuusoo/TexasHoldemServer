@@ -122,7 +122,7 @@ function evaluateHand(cards) {
  * 主函数：比较德州扑克玩家手牌
  * @param {*} players
  * @param {*} communityCards
- * @returns { { id: number; name: string; cards: { rank: string; suit: string }[] }[][] }
+ * @returns { { id: number; name: string; type: string; cards: { rank: string; suit: string }[] }[][] }
  */
 function rankPlayers(players, communityCards) {
     const results = players.map(player => {
@@ -132,7 +132,13 @@ function rankPlayers(players, communityCards) {
             .map(combo => evaluateHand(combo))
             .sort(compareHands)
             .pop();
-        return { id: player.id, name: bestHand.name, cards: bestHand.cards, bestHand };
+        return {
+            id: player.id,
+            name: player.name,
+            type: bestHand.name,
+            cards: bestHand.cards,
+            bestHand,
+        };
     });
 
     // 排序玩家
@@ -157,6 +163,7 @@ function rankPlayers(players, communityCards) {
             group.map(player => ({
                 id: player.id,
                 name: player.name,
+                type: player.type,
                 cards: player.cards,
             }))
         )

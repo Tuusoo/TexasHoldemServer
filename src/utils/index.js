@@ -12,9 +12,34 @@ export const handleWsMessage = (ws, msg) => {
         ws.send(JSON.stringify(obj));
     };
     if (type === "login") {
-        sendMsg({ type: "login", data: "ok" });
+        if (user.getPlayersNum() >= 10) {
+            sendMsg({ type: "login", data: 1 });
+            return;
+        }
         const playerId = data;
-        user.addPlayer(playerId, ws);
+        const isNew = user.addPlayer(playerId, ws);
+        if (isNew === "new") {
+            if (gameStatus.status !== "waiting") {
+                sendMsg({ type: "login", data: 2 });
+                return;
+            }
+            sendMsg({ type: "login", data: 0 });
+        } else {
+            sendMsg({ type: "login", data: 0 });
+            sendMsg({ type: "gameStatus", data: gameStatus.status });
+            const dealerName = user.getPlayer(gameStatus.dealer)?.name;
+            sendMsg({
+                type: "setDealer",
+                data: {
+                    id: gameStatus.dealer,
+                    name: dealerName,
+                },
+            });
+            sendMsg({ type: "communityCards", data: gameStatus.communityCards });
+            sendMsg({ type: "currentPlayer", data: gameStatus.currentPlayer });
+            sendMsg({ type: "highestBet", data: gameStatus.highestBet });
+        }
+        sendUserList();
     }
     if (type === "ping") {
         sendMsg({ type: "pong", data: "pong" });
@@ -291,57 +316,76 @@ const settle = () => {
         const totalBet = user.getPlayersTotalBet();
         user.addChips(settlePlayers[0].id, totalBet);
         user.sendAll({
-            type: "winner",
-            data: {
-                id: [settlePlayers[0].id],
-                name: [settlePlayers[0].name],
-                chips: totalBet,
-            },
+            type: "lastPlayer",
+            data: `只剩一名玩家，所以"${settlePlayers[0].name}"赢得了奖池中所有的${totalBet}筹码`,
         });
         startNewGame();
         return;
     }
-    const communityCards = gameStatus.communityCards;
-    const rankings = comparePoker(settlePlayers, communityCards);
-    const winner = rankings[0];
+    const ranking = comparePoker(settlePlayers, gameStatus.communityCards);
+    const finalResult = handleChipAllocation(ranking);
     user.sendAll({
-        type: "winner",
+        type: "settleResult",
         data: {
-            id: winner.map(i => i.id),
-            name: winner.map(i => user.getPlayer(i.id).name),
-            cards: winner[0].name,
+            ranking: ranking,
+            finalResult: finalResult,
         },
     });
-    user.sendAll({
-        type: "gameResult",
-        data: rankings,
-    });
-    handleChipAllocation(rankings);
     startNewGame();
 };
 /**
  * 结算的时候计算筹码分配
  */
-const handleChipAllocation = rankings => {
-    const totalBet = user.getPlayersTotalBet(); // 所有玩家总下注
-    const players = createDealOrder(gameStatus.dealer, user.playersArray); // 从庄家开始的玩家列表
-    // 获胜者是否有all in
-    const winnerHasAllIn = rankings[0].some(i => user.getPlayer(i.id).isAllIn);
-    if (winnerHasAllIn) {
-        // TODO: 处理有all in的情况
-    } else {
-        const floorNum = Math.floor(totalBet / rankings[0].length / 10) * 10;
-        rankings[0].forEach(i => {
-            user.addChips(i.id, floorNum);
+const handleChipAllocation = ranking => {
+    const playersNum = user.getPlayersNum();
+    const sortUserList = user.playersArray.sort((a, b) => a.totalBet - b.totalBet); // 所有玩家按下注金额从小到大排序
+    const finalPlayers = ranking.flat();
+    const pool = []; // 结算池
+    // 生成结算池，每个结算池包含一组玩家和该池的总筹码，按池子从小到大排列
+    sortUserList.forEach((player, index) => {
+        pool.push({
+            players: sortUserList.slice(index).map(i => i.id),
+            total:
+                (playersNum - index) * (player.totalBet - (sortUserList[index - 1]?.totalBet || 0)),
         });
-        // 如果奖池不能整除获胜者人数，从庄家开始顺时针寻找获胜者，给剩余筹码
-        if (floorNum * rankings[0].length !== totalBet) {
-            const winnerID = rankings[0].map(i => i.id);
-            const remainder = totalBet - floorNum * rankings[0].length;
-            const luckyGuy = players.find(i => winnerID.includes(i.id));
-            user.addChips(luckyGuy.id, remainder);
+    });
+    // 从结算池中移除弃牌的玩家
+    pool.forEach(i => {
+        i.players = i.players.filter(p => finalPlayers.some(f => f.id === p));
+    });
+    const finalResult = finalPlayers.map(player => {
+        return {
+            id: player.id,
+            win: 0,
+        };
+    });
+    pool.forEach(i => {
+        for (let j = 0; j < ranking.length; j++) {
+            if (ranking[j].some(p => i.players.includes(p.id))) {
+                ranking[j].forEach(q => {
+                    finalResult.find(f => f.id === q.id).win += i.total / ranking[j].length;
+                });
+                break;
+            }
         }
+    });
+    let canNotBeDivided = 0;
+    finalResult.forEach(i => {
+        i.name = user.getPlayer(i.id).name;
+        const floor = Math.floor(i.win / 10) * 10;
+        canNotBeDivided += i.win - floor;
+        i.win = floor;
+        user.addChips(i.id, i.win);
+    });
+    if (canNotBeDivided > 0) {
+        // 如果有不能被10整除的筹码，给从庄家开始的第一个获胜者
+        const players = createDealOrder(gameStatus.dealer, user.playersArray); // 从庄家开始的玩家列表
+        const winnerIDs = ranking[0].map(i => i.id);
+        const luckyGuy = players.find(i => winnerIDs.includes(i.id));
+        finalResult.find(i => i.id === luckyGuy.id).win += canNotBeDivided;
+        user.addChips(luckyGuy.id, canNotBeDivided);
     }
+    return finalResult;
 };
 /**
  * 新的一局

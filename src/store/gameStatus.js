@@ -26,6 +26,7 @@ class gameStatus {
 
     setHighestBet(bet) {
         this.highestBet = bet;
+        user.sendAll({ type: "highestBet", data: bet });
     }
 
     setDeck(deck) {

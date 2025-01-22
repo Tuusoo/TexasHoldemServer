@@ -36,9 +36,11 @@ class Players {
                 isAllIn: false,
                 ws: ws,
             });
+            return "new";
         } else {
             this.playersArray[index].lastTime = new Date().getTime();
             this.playersArray[index].ws = ws;
+            return "old";
         }
     }
 
@@ -100,7 +102,7 @@ class Players {
     clearOfflineUser() {
         const time = new Date().getTime();
         this.playersArray.forEach(i => {
-            if (time - i.lastTime > 60000) {
+            if (time - i.lastTime > 300000) {
                 this.removePlayer(i.id);
                 this.sendAll({ type: "gameOver", data: "gameOver" });
             }
