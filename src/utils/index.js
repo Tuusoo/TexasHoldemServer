@@ -229,15 +229,16 @@ const dealCommunityCards = () => {
  * 下一玩家
  */
 const nextPlayer = id => {
-    if (id === gameStatus.dealer) {
-        // 进行到庄家，需要找到需要补注的玩家
+    const players = createDealOrder(gameStatus.dealer, user.playersArray)
+        .filter(i => !i.isFold)
+        .filter(i => !i.isAllIn);
+    const index = players.findIndex(i => i.id === id);
+    const nextPlayer = players[(index + 1) % players.length];
+    if (nextPlayer.currentBet > 0) {
+        // 已循环一轮，需要找到需要补注的玩家
         findNeedAddBet();
     } else {
-        const players = createDealOrder(gameStatus.dealer, user.playersArray)
-            .filter(i => !i.isFold)
-            .filter(i => !i.isAllIn);
-        const index = players.findIndex(i => i.id === id);
-        gameStatus.setCurrentPlayer(players[(index + 1) % players.length].id);
+        gameStatus.setCurrentPlayer(nextPlayer.id);
     }
 };
 /**
