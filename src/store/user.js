@@ -1,10 +1,11 @@
 import { sendUserList } from "../utils/index.js";
+import gameStatus from "./gameStatus.js";
 
 class Players {
     constructor() {
         /**
          * 玩家列表
-         * @type {Array<{id: string, name: string, lastTime: number, ws: WebSocket, ready: boolean, chips: number, handCards: string[], currentBet: number, totalBet: number, isFold: boolean, isAllIn: boolean}>}
+         * @type {Array<{id: string, name: string, lastTime: number, ws: WebSocket, ready: boolean, chips: number, handCards: string[], currentBet: number, isCurrentMove: boolean, totalBet: number, isFold: boolean, isAllIn: boolean}>}
          * id 玩家id
          * name 玩家昵称
          * lastTime 最后一次活动时间
@@ -13,6 +14,7 @@ class Players {
          * chips 玩家筹码
          * handCards 玩家手牌
          * currentBet 此轮下注总额
+         * isCurrentMove 此轮是否操作过
          * totalBet 总下注额
          * isFold 玩家是否弃牌
          * isAllIn 玩家是否all in
@@ -31,6 +33,7 @@ class Players {
                 chips: 1000,
                 handCards: [],
                 currentBet: 0,
+                isCurrentMove: false,
                 totalBet: 0,
                 isFold: false,
                 isAllIn: false,
@@ -101,12 +104,26 @@ class Players {
 
     clearOfflineUser() {
         const time = new Date().getTime();
+        let hasOffLine = false;
         this.playersArray.forEach(i => {
             if (time - i.lastTime > 300000) {
                 this.removePlayer(i.id);
-                this.sendAll({ type: "gameOver", data: "gameOver" });
+                hasOffLine = true;
             }
         });
+        if (hasOffLine) {
+            this.sendAll({
+                type: "gameOver",
+                data: this.playersArray.map(i => ({ id: i.id, name: i.name, chips: i.chips })),
+            });
+            gameStatus.setStatus("waiting");
+            gameStatus.setDealer("");
+            gameStatus.communityCards = [];
+            this.sendAll({ type: "communityCards", data: [] });
+            gameStatus.setCurrentPlayer("");
+            gameStatus.setHighestBet(0);
+            gameStatus.setDeck([]);
+        }
     }
 
     userReady(id) {
@@ -131,6 +148,7 @@ class Players {
             this.playersArray[index].chips -= bet;
             this.playersArray[index].currentBet += bet;
             this.playersArray[index].totalBet += bet;
+            this.playersArray[index].isCurrentMove = true;
             this.sendAll({
                 type: "bet",
                 data: { id: id, name: this.playersArray[index].name, bet: bet },
@@ -149,6 +167,7 @@ class Players {
         const index = this.playersArray.findIndex(i => i.id === id);
         if (index > -1) {
             this.playersArray[index].isFold = true;
+            this.playersArray[index].isCurrentMove = true;
             this.sendAll({
                 type: "fold",
                 data: {
@@ -166,6 +185,7 @@ class Players {
             this.playersArray[index].isAllIn = true;
             this.playersArray[index].currentBet += this.playersArray[index].chips;
             this.playersArray[index].totalBet += this.playersArray[index].chips;
+            this.playersArray[index].chips = 0;
             this.sendAll({
                 type: "allIn",
                 data: {
@@ -176,6 +196,19 @@ class Players {
             });
             sendUserList();
         }
+    }
+
+    movePlayer(id) {
+        const index = this.playersArray.findIndex(i => i.id === id);
+        if (index > -1) {
+            this.playersArray[index].isCurrentMove = true;
+        }
+    }
+
+    clearMove() {
+        this.playersArray.forEach(i => {
+            i.isCurrentMove = false;
+        });
     }
 
     addChips(id, chips) {
