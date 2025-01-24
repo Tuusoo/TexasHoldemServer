@@ -116,14 +116,27 @@ class Players {
                 type: "gameOver",
                 data: this.playersArray.map(i => ({ id: i.id, name: i.name, chips: i.chips })),
             });
-            gameStatus.setStatus("waiting");
-            gameStatus.setDealer("");
-            gameStatus.communityCards = [];
-            this.sendAll({ type: "communityCards", data: [] });
-            gameStatus.setCurrentPlayer("");
-            gameStatus.setHighestBet(0);
-            gameStatus.setDeck([]);
+            this.initUser();
         }
+    }
+
+    initUser() {
+        this.playersArray.forEach(i => {
+            i.ready = false;
+            i.chips = 1000;
+            i.handCards = [];
+            i.currentBet = 0;
+            i.isCurrentMove = false;
+            i.totalBet = 0;
+            i.isFold = false;
+            i.isAllIn = false;
+        });
+        gameStatus.setStatus("waiting");
+        gameStatus.setDealer("");
+        gameStatus.communityCards = [];
+        gameStatus.setCurrentPlayer("");
+        gameStatus.setHighestBet(0);
+        gameStatus.setDeck([]);
     }
 
     userReady(id) {

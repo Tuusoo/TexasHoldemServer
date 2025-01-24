@@ -329,7 +329,6 @@ const settle = () => {
             type: "lastPlayer",
             data: `只剩一名玩家，所以"${settlePlayers[0].name}"赢得了奖池中所有的${totalBet}筹码`,
         });
-        gameStatus.setStatus("settling");
         startNewGame();
         return;
     }
@@ -410,11 +409,13 @@ const handleChipAllocation = ranking => {
  */
 const startNewGame = () => {
     if (user.playersArray.some(i => i.chips === 0)) {
-        user.sendAll({
-            type: "gameOver",
-            data: user.playersArray.map(i => ({ id: i.id, name: i.name, chips: i.chips })),
-        });
-        return;
+        setTimeout(() => {
+            user.sendAll({
+                type: "gameOver",
+                data: user.playersArray.map(i => ({ id: i.id, name: i.name, chips: i.chips })),
+            });
+            user.initUser();
+        }, 500);
     }
     setTimeout(() => {
         user.playersArray.forEach(i => {
